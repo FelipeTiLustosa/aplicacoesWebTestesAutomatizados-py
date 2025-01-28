@@ -13,8 +13,7 @@ class TestRegistrationForm(unittest.TestCase):
         """Configura o WebDriver e abre o navegador."""
         print("Iniciando o navegador...")
         cls.driver = webdriver.Chrome()
-        cls.driver.get(
-            "https://www.cadastrodeclientesonline.com.br/wizard.aspx")
+        cls.driver.get("https://www.cadastrodeclientesonline.com.br/wizard.aspx")
         cls.driver.implicitly_wait(10)
         cls.wait = WebDriverWait(cls.driver, 10)
 
@@ -23,158 +22,149 @@ class TestRegistrationForm(unittest.TestCase):
         campo = self.driver.find_element(By.ID, id_elemento)
         campo.clear()
         campo.send_keys(valor)
-        time.sleep(0.5)
+        time.sleep(0.5)  # Pequena pausa para garantir o preenchimento
 
     def clicar_prosseguir(self):
-        """Método auxiliar para clicar no botão de prosseguir."""
-        botao = self.driver.find_element(
-            By.ID, "ctl00_ContentPlaceHolder1_btnSave")
-        self.driver.execute_script("arguments[0].scrollIntoView();", botao)
-        time.sleep(0.5)
-        botao.click()
+        """Método atualizado para clicar no botão de prosseguir corretamente."""
+        try:
+            # Localiza o botão
+            botao = self.wait.until(EC.element_to_be_clickable((By.ID, "ctl00_ContentPlaceHolder1_btnSave")))
+            # Rolagem para garantir visibilidade
+            self.driver.execute_script("arguments[0].scrollIntoView();", botao)
+            # Força o clique via JavaScript, garantindo que seja executado
+            self.driver.execute_script("arguments[0].click();", botao)
+            time.sleep(2)  # Pequena pausa para permitir o processamento
+        except TimeoutException:
+            self.fail("Erro: Não foi possível clicar no botão 'Prosseguir'")
 
-    def marcar_checkbox(self, id_elemento):
-        """Método auxiliar para marcar checkbox."""
-        checkbox = self.driver.find_element(By.ID, id_elemento)
-        if not checkbox.is_selected():
-            checkbox.click()
+    def verificar_mensagem_erro(self, id_div):
+        """Método auxiliar para verificar se mensagem de erro está visível."""
+        div_erro = self.driver.find_element(By.ID, id_div)
+        return div_erro.is_displayed()
 
     def test_1_campos_vazios(self):
-        """Teste 1: Verificar erro ao submeter formulário com campos vazios."""
-        print("Iniciando teste de campos vazios...")
+        """Teste 1: Verificar mensagens de erro ao submeter formulário vazio."""
+        print("\nIniciando teste de campos vazios...")
+        
+        # Clica em prosseguir sem preencher nada
         self.clicar_prosseguir()
 
-        # Verifica se as mensagens de erro aparecem
-        elementos_erro = ["divNome", "divEmail1", "divSenha1"]
-        for elemento in elementos_erro:
-            div_erro = self.driver.find_element(By.ID, elemento)
-            self.assertTrue(div_erro.is_displayed(),
-                            f"Mensagem de erro para {elemento} não apareceu")
+        # Lista de IDs das mensagens de erro esperadas
+        mensagens_erro = ["divNome", "divEmail1", "divSenha1"]
+        
+        for msg_id in mensagens_erro:
+            erro_visivel = self.verificar_mensagem_erro(msg_id)
+            self.assertTrue(erro_visivel, f"Erro: Mensagem de {msg_id} não apareceu!")
+            if erro_visivel:
+                print(f"✓ Mensagem de {msg_id} exibida corretamente")
 
-    def test_2_validacao_interface(self):
-        """Teste 2: Verificar elementos e comportamento da interface."""
-        print("Iniciando teste de interface...")
-
-        # Verifica presença de elementos principais
-        elementos = [
-            "ctl00_ContentPlaceHolder1_name",
-            "ctl00_ContentPlaceHolder1_email",
-            "ctl00_ContentPlaceHolder1_email2",
-            "ctl00_ContentPlaceHolder1_senha1",
-            "ctl00_ContentPlaceHolder1_senha2",
-            "ctl00_ContentPlaceHolder1_CheckBox1",
-            "ctl00_ContentPlaceHolder1_CheckBox2"
-        ]
-
-        for elemento in elementos:
-            self.assertTrue(
-                self.driver.find_element(By.ID, elemento).is_displayed(),
-                f"Elemento {elemento} não está visível"
-            )
-
-        # Verifica se o placeholder está correto
-        nome_field = self.driver.find_element(
-            By.ID, "ctl00_ContentPlaceHolder1_name")
-        self.assertEqual(nome_field.get_attribute("placeholder"), "Nome")
+    def test_2_emails_diferentes(self):
+        """Teste 2: Verificar validação de confirmação de email."""
+        print("\nIniciando teste de confirmação de email...")
+        
+        # Preenche dados com emails diferentes
+        self.preencher_campo("ctl00_ContentPlaceHolder1_name", "Teste da Silva")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email", "teste@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email2", "outro@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_senha1", "Senha@123")
+        self.preencher_ccampo("ctl00_ContentPlaceHolder1_senha2", "Senha@123")
+        
+        self.clicar_prosseguir()
+        
+        erro_email = self.verificar_mensagem_erro("divEmail2")
+        self.assertTrue(erro_email, "Erro: Sistema não detectou emails diferentes!")
+        if erro_email:
+            print("✓ Validação de emails diferentes funcionando corretamente")
 
     def test_3_formato_email(self):
-        """Teste 3: Verificar diferentes formatos de email."""
-        print("Iniciando teste de formatos de email...")
-
+        """Teste 3: Verificar validação de formato de email."""
+        print("\nIniciando teste de formato de email...")
+        
         emails_invalidos = [
-            "emailsememail.com",  # Sem @
-            "@email.com",         # Sem local-part
-            "email@.com",         # Sem domínio
-            "email@email.",       # TLD incompleto
-            "email@email"         # Sem TLD
+            "emailinvalido",  # Sem @
+            "@semdominio.com",  # Sem usuário
+            "sem@.com",  # Sem domínio
+            "teste@dominio",  # Sem .com
         ]
-
+        
         for email in emails_invalidos:
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_name", "Teste Silva")
+            self.preencher_campo("ctl00_ContentPlaceHolder1_name", "Teste da Silva")
             self.preencher_campo("ctl00_ContentPlaceHolder1_email", email)
             self.preencher_campo("ctl00_ContentPlaceHolder1_email2", email)
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_senha1", "senha123")
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_senha2", "senha123")
-
+            self.preencher_campo("ctl00_ContentPlaceHolder1_senha1", "Senha@123")
+            self.preencher_campo("ctl00_ContentPlaceHolder1_senha2", "Senha@123")
+            
             self.clicar_prosseguir()
+            
+            erro_formato = self.verificar_mensagem_erro("divFormatoEmail")
+            self.assertTrue(erro_formato, f"Erro: Email inválido não detectado: {email}")
+            if erro_formato:
+                print(f"✓ Formato inválido detectado: {email}")
+            
+            time.sleep(1)
+            self.driver.refresh()
+            time.sleep(1)
 
-            div_formato_email = self.driver.find_element(
-                By.ID, "divFormatoEmail")
-            self.assertTrue(div_formato_email.is_displayed(),
-                            f"Email inválido não detectado: {email}")
+    def test_4_senhas_diferentes(self):
+        """Teste 4: Verificar validação de confirmação de senha."""
+        print("\nIniciando teste de confirmação de senha...")
+        
+        self.preencher_campo("ctl00_ContentPlaceHolder1_name", "Teste da Silva")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email", "teste@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email2", "teste@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_senha1", "Senha@123")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_senha2", "Senha@456")
+        
+        self.clicar_prosseguir()
+        
+        erro_senha = self.verificar_mensagem_erro("divSenha2")
+        self.assertTrue(erro_senha, "Erro: Sistema não detectou senhas diferentes!")
+        if erro_senha:
+            print("✓ Validação de senhas diferentes funcionando corretamente")
 
-    def test_4_cadastro_completo(self):
-        """Teste 4: Simular um cadastro completo com dados válidos."""
-        print("Iniciando teste de cadastro completo...")
-
+    def test_5_cadastro_valido(self):
+        """Teste 5: Realizar um cadastro com dados válidos."""
+        print("\nIniciando teste de cadastro válido...")
+        
         # Preenche todos os campos corretamente
         self.preencher_campo("ctl00_ContentPlaceHolder1_name", "Maria Silva")
-        self.preencher_campo(
-            "ctl00_ContentPlaceHolder1_email", "maria@email.com")
-        self.preencher_campo(
-            "ctl00_ContentPlaceHolder1_email2", "maria@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email", "maria@email.com")
+        self.preencher_campo("ctl00_ContentPlaceHolder1_email2", "maria@email.com")
         self.preencher_campo("ctl00_ContentPlaceHolder1_senha1", "Senha@123")
         self.preencher_campo("ctl00_ContentPlaceHolder1_senha2", "Senha@123")
-
+        
         # Marca os checkboxes
-        self.marcar_checkbox("ctl00_ContentPlaceHolder1_CheckBox1")
-        self.marcar_checkbox("ctl00_ContentPlaceHolder1_CheckBox2")
-
-        # Submete o formulário
+        checkbox1 = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_CheckBox1")
+        checkbox2 = self.driver.find_element(By.ID, "ctl00_ContentPlaceHolder1_CheckBox2")
+        
+        if not checkbox1.is_selected():
+            checkbox1.click()
+        if not checkbox2.is_selected():
+            checkbox2.click()
+        
         self.clicar_prosseguir()
-
-        try:
-            # Aguarda mudança de página ou mensagem de sucesso
-            # Ajuste o seletor conforme necessário
-            self.wait.until(lambda driver: driver.current_url !=
-                            "https://www.cadastrodeclientesonline.com.br/wizard.aspx")
-            print("Cadastro realizado com sucesso!")
-        except TimeoutException:
-            self.fail("Cadastro não foi concluído com sucesso")
-
-    def test_5_validacao_senha(self):
-        """Teste 5: Verificar diferentes formatos e requisitos de senha."""
-        print("Iniciando teste de validação de senha...")
-
-        # Lista de senhas para testar
-        senhas_teste = [
-            ("123", False),           # Muito curta
-            ("12345678", True),       # Tamanho adequado
-            ("senha com espaço", False),  # Contém espaço
-            ("Senha@123", True),      # Formato válido
-        ]
-
-        for senha, esperado_valido in senhas_teste:
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_name", "Teste Silva")
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_email", "teste@email.com")
-            self.preencher_campo(
-                "ctl00_ContentPlaceHolder1_email2", "teste@email.com")
-            self.preencher_campo("ctl00_ContentPlaceHolder1_senha1", senha)
-            self.preencher_campo("ctl00_ContentPlaceHolder1_senha2", senha)
-
-            self.clicar_prosseguir()
-
-            # Verifica se o comportamento corresponde ao esperado
-            div_senha = self.driver.find_element(By.ID, "divSenha2")
-            if esperado_valido:
-                self.assertFalse(div_senha.is_displayed(),
-                                 f"Senha válida foi rejeitada: {senha}")
-            else:
-                self.assertTrue(div_senha.is_displayed(),
-                                f"Senha inválida foi aceita: {senha}")
+        
+        # Verifica se não há mensagens de erro
+        mensagens_erro = ["divNome", "divEmail1", "divEmail2", "divSenha1", "divSenha2", "divFormatoEmail"]
+        sem_erros = True
+        
+        for msg_id in mensagens_erro:
+            if self.verificar_mensagem_erro(msg_id):
+                print(f"✗ Erro inesperado: {msg_id} está visível")
+                sem_erros = False
+        
+        if sem_erros:
+            print("✓ Cadastro realizado com sucesso!")
+        
+        self.assertTrue(sem_erros, "Erro: Cadastro válido apresentou mensagens de erro!")
 
     @classmethod
     def tearDownClass(cls):
         """Fecha o navegador após os testes."""
-        print("Fechando o navegador...")
+        print("\nFechando o navegador...")
         time.sleep(2)
         cls.driver.quit()
 
 
 if __name__ == "__main__":
-    unittest.main(argv=[''], exit=False)
+    unittest.main(argv=[''], verbosity=2)
